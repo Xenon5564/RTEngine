@@ -3,14 +3,8 @@
 #include <fstream>
 #include <iostream>
 #include <sstream>
+#include "CameraController.h"
 
-struct Camera {
-    float position[3];
-    float forward[3];
-    float up[3];
-    float right[3];
-    float fov;
-};
 
 const unsigned int WIDTH = 1040;
 const unsigned int HEIGHT = 624;
@@ -87,8 +81,10 @@ int main() {
         {1.0f, 0.0f, 0.0f},   // right
         45.0f                // fov in degrees
     };
+    CameraController controller(cam, window);
+    glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 
-    // Pass camera data to compute shader
+    // Camera uniforms
     glUseProgram(computeProgram);
     GLint locPos = glGetUniformLocation(computeProgram, "camPos");
     GLint locForward = glGetUniformLocation(computeProgram, "camForward");
@@ -123,10 +119,23 @@ int main() {
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), 0);
 
+    float lastTime = (float)glfwGetTime();
+
     // Render loop
     while (!glfwWindowShouldClose(window)) {
-        // Run compute shader
+        float currentTime = (float)glfwGetTime();
+        float deltaTime = currentTime - lastTime;
+        lastTime = currentTime;
+
+        controller.update(deltaTime);
+
         glUseProgram(computeProgram);
+        glUniform3fv(locPos, 1, cam.position);
+        glUniform3fv(locForward, 1, cam.forward);
+        glUniform3fv(locUp, 1, cam.up);
+        glUniform3fv(locRight, 1, cam.right);
+        glUniform1f(locFov, cam.fov);
+
         glDispatchCompute(WIDTH / 8, HEIGHT / 8, 1);
         glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
 
