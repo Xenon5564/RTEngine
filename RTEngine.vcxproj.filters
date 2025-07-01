@@ -47,6 +47,9 @@
     <ClInclude Include="External\glad\include\KHR\khrplatform.h">
       <Filter>glad\KHR</Filter>
     </ClInclude>
+    <ClInclude Include="Source\CameraController.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Source\main.cpp">
@@ -54,6 +57,9 @@
     </ClCompile>
     <ClCompile Include="External\glad\glad.c">
       <Filter>glad</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\CameraController.cpp">
+      <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>

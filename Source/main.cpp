@@ -6,8 +6,8 @@
 #include "CameraController.h"
 
 
-const unsigned int WIDTH = 1040;
-const unsigned int HEIGHT = 624;
+const unsigned int WIDTH = 1920;
+const unsigned int HEIGHT = 1060;
 
 std::string loadFile(const char* path) {
     std::ifstream file(path);
@@ -75,11 +75,11 @@ int main() {
 
     // Define a simple camera
     Camera cam = {
-        {0.0f, 0.0f, 0.0f},   // position
-        {0.0f, 0.0f, -1.0f},  // forward
+        {0.0f, 0.0f, 3.0f},   // position
+        {0.0f, 0.0f, 1.0f},  // forward
         {0.0f, 1.0f, 0.0f},   // up
         {1.0f, 0.0f, 0.0f},   // right
-        45.0f                // fov in degrees
+        60.0f                // fov in degrees
     };
     CameraController controller(cam, window);
     glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);

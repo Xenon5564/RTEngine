@@ -27,9 +27,11 @@
     <ClInclude Include="External\glad\include\glad\glad.h" />
     <ClInclude Include="External\glad\include\KHR\khrplatform.h" />
     <ClInclude Include="External\glfw\include\GLFW\glfw3.h" />
+    <ClInclude Include="Source\CameraController.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="External\glad\glad.c" />
+    <ClCompile Include="Source\CameraController.cpp" />
     <ClCompile Include="Source\main.cpp" />
   </ItemGroup>
   <PropertyGroup Label="Globals">

@@ -1,6 +1,8 @@
 #include "CameraController.h"
 #include <cmath>
 
+#define M_PI 3.1415926535
+
 CameraController::CameraController(Camera& camera, GLFWwindow* window)
     : cam(camera), win(window), lastX(0.0), lastY(0.0), firstMouse(true), yaw(-90.0f), pitch(0.0f) {
     // initialize yaw and pitch from camera forward vector
@@ -11,7 +13,7 @@ CameraController::CameraController(Camera& camera, GLFWwindow* window)
 void CameraController::updateVectors() {
     // calculate forward vector from yaw and pitch
     float yawRad = yaw * M_PI / 180.0f;
-    float pitchRad = pitch * M_PI / 180.0f;
+    float pitchRad = -pitch * M_PI / 180.0f;
     cam.forward[0] = cosf(pitchRad) * cosf(yawRad);
     cam.forward[1] = sinf(pitchRad);
     cam.forward[2] = cosf(pitchRad) * sinf(yawRad);
@@ -55,11 +57,11 @@ void CameraController::update(float deltaTime) {
         cam.position[2] += cam.right[2] * speed;
     }
     if (glfwGetKey(win, GLFW_KEY_SPACE) == GLFW_PRESS) {
-        cam.position[1] += speed;
+        cam.position[1] -= speed;
     }
     if (glfwGetKey(win, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS ||
         glfwGetKey(win, GLFW_KEY_RIGHT_CONTROL) == GLFW_PRESS) {
-        cam.position[1] -= speed;
+        cam.position[1] += speed;
     }
 
     double x, y;
