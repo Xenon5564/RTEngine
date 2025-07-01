@@ -9,6 +9,7 @@ struct Camera {
     float forward[3];
     float up[3];
     float right[3];
+    float fov;
 };
 
 const unsigned int WIDTH = 1040;
@@ -83,7 +84,8 @@ int main() {
         {0.0f, 0.0f, 3.0f},   // position
         {0.0f, 0.0f, -1.0f},  // forward
         {0.0f, 1.0f, 0.0f},   // up
-        {1.0f, 0.0f, 0.0f}    // right
+        {1.0f, 0.0f, 0.0f},   // right
+        45.0f                // fov in degrees
     };
 
     // Pass camera data to compute shader
@@ -92,10 +94,12 @@ int main() {
     GLint locForward = glGetUniformLocation(computeProgram, "camForward");
     GLint locUp = glGetUniformLocation(computeProgram, "camUp");
     GLint locRight = glGetUniformLocation(computeProgram, "camRight");
+    GLint locFov = glGetUniformLocation(computeProgram, "camFOV");
     glUniform3fv(locPos, 1, cam.position);
     glUniform3fv(locForward, 1, cam.forward);
     glUniform3fv(locUp, 1, cam.up);
     glUniform3fv(locRight, 1, cam.right);
+    glUniform1f(locFov, cam.fov);
 
     // Create output texture
     GLuint tex;
