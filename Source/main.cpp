@@ -4,6 +4,14 @@
 #include <iostream>
 #include <sstream>
 
+struct Camera {
+    float position[3];
+    float forward[3];
+    float up[3];
+    float right[3];
+    float fov;
+};
+
 const unsigned int WIDTH = 1040;
 const unsigned int HEIGHT = 624;
 
@@ -68,8 +76,30 @@ int main() {
     gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
 
     // Load shaders
-    GLuint computeProgram = createComputeProgram("Shaders/raytrace.comp");
+    GLuint computeProgram = createComputeProgram("Shaders/RayTrace.comp");
     GLuint screenProgram = createProgram("Shaders/fullscreen.vert", "Shaders/fullscreen.frag");
+
+    // Define a simple camera
+    Camera cam = {
+        {0.0f, 0.0f, 3.0f},   // position
+        {0.0f, 0.0f, -1.0f},  // forward
+        {0.0f, 1.0f, 0.0f},   // up
+        {1.0f, 0.0f, 0.0f},   // right
+        45.0f                // fov in degrees
+    };
+
+    // Pass camera data to compute shader
+    glUseProgram(computeProgram);
+    GLint locPos = glGetUniformLocation(computeProgram, "camPos");
+    GLint locForward = glGetUniformLocation(computeProgram, "camForward");
+    GLint locUp = glGetUniformLocation(computeProgram, "camUp");
+    GLint locRight = glGetUniformLocation(computeProgram, "camRight");
+    GLint locFov = glGetUniformLocation(computeProgram, "camFOV");
+    glUniform3fv(locPos, 1, cam.position);
+    glUniform3fv(locForward, 1, cam.forward);
+    glUniform3fv(locUp, 1, cam.up);
+    glUniform3fv(locRight, 1, cam.right);
+    glUniform1f(locFov, cam.fov);
 
     // Create output texture
     GLuint tex;

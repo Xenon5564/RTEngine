@@ -1,9 +1,27 @@
 #version 450
 layout(local_size_x = 8, local_size_y = 8) in;
 layout(rgba32f, binding = 0) uniform image2D destImage;
+uniform vec3 camPos;
+uniform vec3 camForward;
+uniform vec3 camUp;
+uniform vec3 camRight;
+uniform float camFOV;
 
 void main() {
     ivec2 pix = ivec2(gl_GlobalInvocationID.xy);
-    vec2 uv = vec2(pix) / vec2(imageSize(destImage));
-    imageStore(destImage, pix, vec4(uv, 0, 1.0));
+    ivec2 imgSize = imageSize(destImage);
+    vec2 uv = (vec2(pix) + vec2(0.5)) / vec2(imgSize);
+
+    float planeDist = 1.0;
+    float halfHeight = tan(radians(camFOV * 0.5)) * planeDist;
+    float aspect = float(imgSize.x) / float(imgSize.y);
+    float halfWidth = halfHeight * aspect;
+
+    vec3 planeCenter = camPos + camForward * planeDist;
+    vec3 pointOnPlane = planeCenter
+        + (uv.x - 0.5) * 2.0 * halfWidth * camRight
+        + (0.5 - uv.y) * 2.0 * halfHeight * camUp;
+
+    vec3 dir = normalize(pointOnPlane - camPos);
+    imageStore(destImage, pix, vec4(dir, 1.0));
 }
