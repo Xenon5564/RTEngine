@@ -81,7 +81,7 @@ int main() {
 
     // Define a simple camera
     Camera cam = {
-        {0.0f, 0.0f, 3.0f},   // position
+        {0.0f, 0.0f, 0.0f},   // position
         {0.0f, 0.0f, -1.0f},  // forward
         {0.0f, 1.0f, 0.0f},   // up
         {1.0f, 0.0f, 0.0f},   // right
