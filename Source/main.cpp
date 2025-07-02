@@ -5,9 +5,8 @@
 #include <sstream>
 #include "CameraController.h"
 
-
-const unsigned int WIDTH = 1920;
-const unsigned int HEIGHT = 1060;
+const unsigned int WIDTH = 1280;
+const unsigned int HEIGHT = 800;
 
 std::string loadFile(const char* path) {
     std::ifstream file(path);
