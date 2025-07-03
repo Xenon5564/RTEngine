@@ -19,6 +19,7 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <None Include="glsl Shaders\RayTrace.comp" />
     <None Include="Shaders\fullscreen.frag" />
     <None Include="Shaders\fullscreen.vert" />
     <None Include="Shaders\RayTrace.comp" />

@@ -90,6 +90,11 @@ int main() {
     GLint locUp = glGetUniformLocation(computeProgram, "camUp");
     GLint locRight = glGetUniformLocation(computeProgram, "camRight");
     GLint locFov = glGetUniformLocation(computeProgram, "camFOV");
+
+    // Frame counters
+    GLint locTotalFrameCount = glGetUniformLocation(computeProgram, "globalFrameID");
+    GLint locFrameCountSinceMove = glGetUniformLocation(computeProgram, "frameID");
+
     glUniform3fv(locPos, 1, cam.position);
     glUniform3fv(locForward, 1, cam.forward);
     glUniform3fv(locUp, 1, cam.up);
@@ -102,6 +107,13 @@ int main() {
     glBindTexture(GL_TEXTURE_2D, tex);
     glTexStorage2D(GL_TEXTURE_2D, 1, GL_RGBA32F, WIDTH, HEIGHT);
     glBindImageTexture(0, tex, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA32F);
+
+    // Create accumulation texture
+    GLuint accumTex;
+    glGenTextures(1, &accumTex);
+    glBindTexture(GL_TEXTURE_2D, accumTex);
+    glTexStorage2D(GL_TEXTURE_2D, 1, GL_RGBA32F, WIDTH, HEIGHT);
+    glBindImageTexture(1, accumTex, 0, GL_FALSE, 0, GL_READ_WRITE, GL_RGBA32F);
 
     // Fullscreen triangle setup
     float quadVerts[] = {
@@ -120,6 +132,11 @@ int main() {
 
     float lastTime = (float)glfwGetTime();
 
+    // Frame counters
+    int totalFrameCount = 0;
+    int frameCountSinceCameraMove = 0;
+    Camera lastCamera = cam;
+
     // Render loop
     while (!glfwWindowShouldClose(window)) {
         float currentTime = (float)glfwGetTime();
@@ -128,12 +145,29 @@ int main() {
 
         controller.update(deltaTime);
 
+        // Detect camera movement (simple position/orientation check)
+        bool cameraMoved = false;
+        if (memcmp(&cam, &lastCamera, sizeof(Camera)) != 0) {
+            cameraMoved = true;
+            lastCamera = cam;
+        }
+
+        if (cameraMoved) {
+            frameCountSinceCameraMove = 0;
+            // Optionally clear accumulation image here if you use one
+            glClearTexImage(accumTex, 0, GL_RGBA, GL_FLOAT, nullptr);
+        }
+
         glUseProgram(computeProgram);
         glUniform3fv(locPos, 1, cam.position);
         glUniform3fv(locForward, 1, cam.forward);
         glUniform3fv(locUp, 1, cam.up);
         glUniform3fv(locRight, 1, cam.right);
         glUniform1f(locFov, cam.fov);
+
+        // Pass frame counters to shader
+        glUniform1i(locTotalFrameCount, totalFrameCount);
+        glUniform1i(locFrameCountSinceMove, frameCountSinceCameraMove);
 
         glDispatchCompute(WIDTH / 8, HEIGHT / 8, 1);
         glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
@@ -147,6 +181,10 @@ int main() {
 
         glfwSwapBuffers(window);
         glfwPollEvents();
+
+        // Increment counters
+        ++totalFrameCount;
+        ++frameCountSinceCameraMove;
     }
 
     glfwTerminate();

@@ -36,6 +36,7 @@
     <None Include="Shaders\fullscreen.vert">
       <Filter>Shaders</Filter>
     </None>
+    <None Include="glsl Shaders\RayTrace.comp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="External\glfw\include\GLFW\glfw3.h">
