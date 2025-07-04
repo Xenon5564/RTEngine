@@ -1,8 +1,8 @@
 ﻿#version 450
 layout(local_size_x = 8, local_size_y = 8) in;
 
-layout(rgba32f, binding = 0) uniform image2D destImage;
-layout(rgba32f, binding = 1) uniform image2D accumImage;
+layout(rgba32F, binding = 0) uniform image2D destImage;
+layout(rgba32F, binding = 1) uniform image2D accumImage;
 
 uniform vec3 camPos;
 uniform vec3 camForward;
@@ -17,19 +17,27 @@ struct Sphere{
     vec3 position;
     float radius;
     vec3 albedo;
-    float roughness; 
+    float roughness;
+    float metallic;
 };
 
-const uint SPHERE_COUNT = 5;
+const uint SPHERE_COUNT = 12;
 const float PI = 3.14159265358979323846;
-const float EPSILON = 0.0001;
+const float EPSILON = 0.001;
 
 Sphere spheres[SPHERE_COUNT] = Sphere[](
-    Sphere(vec3(-1.0, 0.0, 0.0), 0.5, vec3(1.0, 1.0, 1.0), 0), 
-    Sphere(vec3(0.0, 0.0, 0.0), 0.5, vec3(1.0, 1.0, 1.0), 0.25), 
-    Sphere(vec3(1.0, 0.0, 0.0), 0.5, vec3(1.0, 1.0, 1.0), 0.5),
-    Sphere(vec3(2.0, 0.0, 0.0), 0.5, vec3(1.0, 1.0, 1.0), 1),
-    Sphere(vec3(0.0, -100.5, 0.0), 100, vec3(1.0, 1.0, 1.0), 0) 
+    Sphere(vec3(-4.0, 0.0, 0.0), 0.5, vec3(1.0, 1.0, 1.0), 0.001, 1),
+    Sphere(vec3(-3.0, 0.0, 0.0), 0.5, vec3(1.0, 1.0, 1.0), 0.1, 1),
+    Sphere(vec3(-2.0, 0.0, 0.0), 0.5, vec3(1.0, 1.0, 1.0), 0.2, 1),
+    Sphere(vec3(-1.0, 0.0, 0.0), 0.5, vec3(1.0, 1.0, 1.0), 0.3, 1),
+    Sphere(vec3(0.0, 0.0, 0.0), 0.5, vec3(1.0, 1.0, 1.0), 0.4, 1),
+    Sphere(vec3(1.0, 0.0, 0.0), 0.5, vec3(1.0, 1.0, 1.0), 0.5, 1),
+    Sphere(vec3(2.0, 0.0, 0.0), 0.5, vec3(1.0, 1.0, 1.0), 0.6, 1),
+    Sphere(vec3(3.0, 0.0, 0.0), 0.5, vec3(1.0, 1.0, 1.0), 0.7, 1),
+    Sphere(vec3(4.0, 0.0, 0.0), 0.5, vec3(1.0, 1.0, 1.0), 0.8, 1),
+    Sphere(vec3(5.0, 0.0, 0.0), 0.5, vec3(1.0, 1.0, 1.0), 0.9, 1),
+    Sphere(vec3(6.0, 0.0, 0.0), 0.5, vec3(1.0, 1.0, 1.0), 1.0, 1),
+    Sphere(vec3(0.0, -1000.5, 0.0), 1000, vec3(1.0, 1, 1.0), 1, 1)
 );
 
 // Randomness
@@ -48,7 +56,62 @@ float rand(inout uint seed) {
     return float(seed) / float(0xFFFFFFFFu); // Normalize to [0, 1)
 }
 
-// Samples cosine-weighted hemisphere oriented around `normal`
+
+
+// GGX helpers
+float chiGGX(float v){
+    return v > 0 ? 1 : 0;
+}
+
+// GGX BRDF helpers
+float GGXDistribution(vec3 n, vec3 h, float rough){
+    float NoH = dot(n,h);
+    float rough2 = rough * rough;
+    float NoH2 = NoH * NoH;
+
+    float den = NoH2 * rough2 + (1 - NoH2);
+    return (chiGGX(NoH) * rough2) / ( PI * den * den );
+}               // Distrubution of microfacets
+float GGXSmithG1(float NoV, float roughness) {
+    float a = roughness;
+    float a2 = a * a;
+    float denom = NoV + sqrt(a2 + (1 - a2) * NoV * NoV);
+    return NoV / denom;
+}                   // Helper of Geometry term
+float GGXGeometrySmith(vec3 n, vec3 v, vec3 l, float roughness) {
+    float NoV = max(dot(n, v), 0.0);
+    float NoL = max(dot(n, l), 0.0);
+    return GGXSmithG1(NoV, roughness) * GGXSmithG1(NoL, roughness);
+}// Geometry of the microfacets
+vec3 FresnelSchlick(float cosT, vec3 F0){
+  return F0 + (1-F0) * pow( 1 - cosT, 5);
+}                         // Fresnel term 
+vec3 sampleGGX(vec3 N, float roughness, inout uint seed) {
+    float a = roughness * roughness;
+
+    float u1 = rand(seed);
+    float u2 = rand(seed);
+
+    float phi = 2.0 * PI * u1;
+    float cosTheta = sqrt((1.0 - u2) / (1.0 + (a * a - 1.0) * u2));
+    float sinTheta = sqrt(1.0 - cosTheta * cosTheta);
+
+    vec3 H = vec3(
+        sinTheta * cos(phi),
+        sinTheta * sin(phi),
+        cosTheta
+    );
+
+    // Align H to the normal's hemisphere
+    vec3 up = abs(N.z) < 0.999 ? vec3(0,0,1) : vec3(1,0,0);
+    vec3 tangentX = normalize(cross(up, N));
+    vec3 tangentY = cross(N, tangentX);
+
+    return normalize(
+        tangentX * H.x + tangentY * H.y + N * H.z
+    );
+}       // Importance Sample of microfacets
+
 vec3 sampleHemisphere(vec3 normal, inout uint seed) {
     float u1 = rand(seed);
     float u2 = rand(seed);
@@ -65,7 +128,45 @@ vec3 sampleHemisphere(vec3 normal, inout uint seed) {
     vec3 bitangent = cross(normal, tangent);
 
     return normalize(x * tangent + y * bitangent + z * normal);
-}
+}// Samples cosine-weighted hemisphere oriented around `normal`
+
+vec3 CookTorranceSample(vec3 N, vec3 V, vec3 albedo, float metallic, float roughness, inout vec3 rayDir, inout uint rngSeed) {
+    float NoV = max(dot(N, V), 0.0);
+    vec3 F0 = mix(vec3(0.04), albedo, metallic);
+
+    // Decide: diffuse or specular sampling
+    float probSpecular = mix(0.25, 0.95, metallic); // More metallic = more specular
+    if (rand(rngSeed) < probSpecular) {
+        // --- SPECULAR BOUNCE ---
+        vec3 H = sampleGGX(N, roughness, rngSeed);
+        rayDir = reflect(-V, H);  // Reflect around half-vector
+
+        float NoL = max(dot(N, rayDir), 0.0);
+        if (NoL <= 0.0) return vec3(0.0); // Below surface → discard
+
+        float NoH = max(dot(N, H), 0.0);
+        float VoH = max(dot(V, H), 0.0);
+
+        float D = GGXDistribution(N, H, roughness);
+        float G = GGXGeometrySmith(N, V, rayDir, roughness);
+        vec3 F = FresnelSchlick(VoH, F0);
+
+        vec3 spec = (D * G * F) / (4.0 * NoV * NoL); // Remove max() for better energy conservation
+        float pdf = D * NoH / (4.0 * VoH); // PDF for specular sampling
+
+        return spec / pdf; // Divide by PDF for correct importance sampling
+    } else {
+        // --- DIFFUSE BOUNCE ---
+        rayDir = sampleHemisphere(N, rngSeed);
+        float NoL = max(dot(N, rayDir), 0.0);
+
+        vec3 kD = (1.0 - metallic) * (1.0 - clamp(FresnelSchlick(NoV, F0), 0.0, 1.0)); //cant saturate a vec3`
+        vec3 diffuse = (albedo / PI) * kD;
+
+        float pdf = NoL / PI; // PDF for cosine-weighted hemisphere sampling
+        return diffuse / pdf; // Divide by PDF
+    }
+} // Final PBR sample
 
 bool RaySphereIntersection(vec3 rayOrigin, vec3 rayDir, vec3 sphereCenter, float radius, out float t) {
     vec3 oc = rayOrigin - sphereCenter;
@@ -94,8 +195,7 @@ bool RaySphereIntersection(vec3 rayOrigin, vec3 rayDir, vec3 sphereCenter, float
     return false; // both intersections are behind the ray
 }
 
-bool CastRay(vec3 rayOrigin, vec3 rayDir, out Sphere hitSphere, out float t)
-{
+bool CastRay(vec3 rayOrigin, vec3 rayDir, out Sphere hitSphere, out float t){
     float closestT = 100000000;
     float dis;
     int closestID = -1;
@@ -136,48 +236,43 @@ vec3 TraceRay(vec3 camPos, vec3 camToPlaneDir, uint seed)
     Sphere hitSphere;
     Sphere dummySphere;
 
-    for(int b = 0; b < 5; b++)
+    for(int b = 0; b < 10; b++)
     {
         if(CastRay(rayOri, rayDir, hitSphere, t))
         {
-            vec3 sphereCen = hitSphere.position;
-            vec3 sphereCol = hitSphere.albedo;
-            float sphereRoughness = hitSphere.roughness;
+            vec3 position = hitSphere.position;
+            vec3 albedo = hitSphere.albedo;
+            float roughness = hitSphere.roughness;
+            float metallic = hitSphere.metallic;
 
-            vec3 lightPos = vec3(0.0, 5, 0.0);
-            float lightStrength = 20.0;
+            vec3 lightPos = vec3(0.0, 25, 0.0);
+            vec3 lightCol = vec3(1.0, 1.0, 1.0); 
+            float lightStrength = 500.0;
 
             vec3 hitPoint = rayOri + rayDir * t;
-            vec3 normal = normalize(hitPoint - sphereCen);
+            vec3 normal = normalize(hitPoint - position);
+            vec3 viewDir = -rayDir;
 
-            hitPoint += normal * EPSILON; // Offset to avoid self-intersection
+            hitPoint += normal * EPSILON;
+            rayOri = hitPoint;
 
-            rayOri = hitPoint; // Update ray origin to the hit point
+            vec3 brdfValue = CookTorranceSample(normal, viewDir, albedo, metallic, roughness, rayDir, seed);
 
-            if(sphereRoughness <= rand(seed)) // Check if we should sample a new direction
-            {
-                rayDir = sampleHemisphere(normal, seed); // Sample a new direction in the hemisphere
-            }
-            else
-            {
-                rayDir = reflect(rayDir, normal); // Reflect the ray direction
-            }
-
+            // Shadow check
             vec3 lightDir = normalize(lightPos - hitPoint);
-            
             if(!CastRay(hitPoint, lightDir, dummySphere, dummyT))
             {
                 float lambert = max(0.0, dot(normal, lightDir));
                 float lightDis = length(lightPos - hitPoint);
                 float lightAtten = lightStrength / (lightDis * lightDis);
 
-                finalColor += pathThroughput * sphereCol * lambert * lightAtten;
+                finalColor += pathThroughput * brdfValue * lightCol * lambert * lightAtten;
             }
-            pathThroughput *= sphereCol / PI; 
+            pathThroughput *= brdfValue;
         }
         else
         {
-            vec3 skyCol = vec3(0.1, 0.1, 0.1);
+            vec3 skyCol = vec3(0.1, 0.5, 0.5);
             finalColor += pathThroughput * skyCol; // Background color
             break;
         }
@@ -210,6 +305,4 @@ void main() {
 
     imageStore(accumImage, pix, vec4(newAverage, 1.0)); // Store the new average color
     imageStore(destImage, pix, vec4(newAverage, 1.0));
-    imageStore(destImage, pix, vec4(newAverage, 1.0));
-
 }
