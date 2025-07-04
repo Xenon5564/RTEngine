@@ -4,20 +4,22 @@ layout(local_size_x = 8, local_size_y = 8) in;
 layout(rgba32f, binding = 0) uniform image2D destImage;
 layout(rgba32f, binding = 1) uniform image2D accumImage;
 
-uniform vec3 camPos;
-uniform vec3 camForward;
-uniform vec3 camUp;
-uniform vec3 camRight;
-uniform float camFOV;
-
-uniform int globalFrameID; // Frames generated since start
-uniform int frameID; //Frames since last camera move
+layout(std140, binding = 2) uniform CameraUBO {
+    vec3 camPos;
+    float camFOV;
+    vec3 camForward;
+    int globalFrameID;
+    vec3 camUp;
+    int frameID;
+    vec3 camRight;
+} cam;
 
 struct Sphere{
     vec3 position;
     float radius;
     vec3 albedo;
-    float roughness; 
+    float roughness;
+    float metallic;
 };
 
 const uint SPHERE_COUNT = 5;
@@ -25,11 +27,11 @@ const float PI = 3.14159265358979323846;
 const float EPSILON = 0.0001;
 
 Sphere spheres[SPHERE_COUNT] = Sphere[](
-    Sphere(vec3(-1.0, 0.0, 0.0), 0.5, vec3(1.0, 1.0, 1.0), 0), 
-    Sphere(vec3(0.0, 0.0, 0.0), 0.5, vec3(1.0, 1.0, 1.0), 0.25), 
-    Sphere(vec3(1.0, 0.0, 0.0), 0.5, vec3(1.0, 1.0, 1.0), 0.5),
-    Sphere(vec3(2.0, 0.0, 0.0), 0.5, vec3(1.0, 1.0, 1.0), 1),
-    Sphere(vec3(0.0, -100.5, 0.0), 100, vec3(1.0, 1.0, 1.0), 0) 
+    Sphere(vec3(-1.0, 0.0, 0.0), 0.5, vec3(1.0, 0.766, 0.336), 0.2, 1.0),
+    Sphere(vec3(0.0, 0.0, 0.0), 0.5, vec3(0.95, 0.93, 0.88), 0.25, 0.0),
+    Sphere(vec3(1.0, 0.0, 0.0), 0.5, vec3(0.3, 0.3, 0.8), 0.5, 0.0),
+    Sphere(vec3(2.0, 0.0, 0.0), 0.5, vec3(1.0, 0.0, 0.0), 1.0, 0.2),
+    Sphere(vec3(0.0, -100.5, 0.0), 100, vec3(1.0, 1.0, 1.0), 1.0, 0.0)
 );
 
 // Randomness
@@ -105,7 +107,9 @@ vec3 CookTorranceSpec(vec3 N, vec3 V, vec3 L, float roughness, vec3 F0)
     float G = GeometrySmith(NdotV, NdotL, roughness);
     vec3 F = fresnelSchlick(VdotH, F0);
 
-    return (D * G * F) / max(4.0 * NdotV * NdotL, 0.001);
+    vec3 numerator = D * G * F;
+    float denominator = max(4.0 * NdotV * NdotL, 0.001);
+    return numerator / denominator * NdotL;
 }
 
 bool RaySphereIntersection(vec3 rayOrigin, vec3 rayDir, vec3 sphereCenter, float radius, out float t) {
@@ -184,6 +188,7 @@ vec3 TraceRay(vec3 camPos, vec3 camToPlaneDir, uint seed)
             vec3 sphereCen = hitSphere.position;
             vec3 sphereCol = hitSphere.albedo;
             float sphereRoughness = hitSphere.roughness;
+            float sphereMetallic = hitSphere.metallic;
 
             vec3 lightPos = vec3(0.0, 5, 0.0);
             float lightStrength = 20.0;
@@ -205,21 +210,25 @@ vec3 TraceRay(vec3 camPos, vec3 camToPlaneDir, uint seed)
             }
 
             vec3 lightDir = normalize(lightPos - hitPoint);
+            vec3 viewDir = normalize(-rayDir);
+            vec3 F0 = mix(vec3(0.04), sphereCol, sphereMetallic);
+            vec3 H = normalize(viewDir + lightDir);
+            vec3 fresnel = fresnelSchlick(max(dot(viewDir, H), 0.0), F0);
+            vec3 kS = fresnel;
+            vec3 kD = (vec3(1.0) - kS) * (1.0 - sphereMetallic);
             
             if(!CastRay(hitPoint, lightDir, dummySphere, dummyT))
             {
                 float lambert = max(0.0, dot(normal, lightDir));
                 float lightDis = length(lightPos - hitPoint);
                 float lightAtten = lightStrength / (lightDis * lightDis);
+                vec3 spec = CookTorranceSpec(normal, viewDir, lightDir, sphereRoughness, F0);
 
-                vec3 F0 = vec3(0.04);
-                vec3 spec = CookTorranceSpec(normal, normalize(-rayDir), lightDir, sphereRoughness, F0);
-
-                vec3 diffuse = sphereCol * lambert / PI;
+                vec3 diffuse = kD * sphereCol * lambert / PI;
 
                 finalColor += pathThroughput * (diffuse + spec) * lightAtten;
             }
-            pathThroughput *= sphereCol / PI;
+            pathThroughput *= kD * sphereCol / PI;
         }
         else
         {
@@ -236,23 +245,23 @@ void main() {
     ivec2 imgSize = imageSize(destImage);
     vec2 uv = (vec2(pix) + vec2(0.5)) / vec2(imgSize);
 
-    uint seed = uint(pix.x * 73856093u ^ pix.y * 19349663u ^ uint(globalFrameID * 1000.0)) * uint(frameID + 2);
+    uint seed = uint(pix.x * 73856093u ^ pix.y * 19349663u ^ uint(cam.globalFrameID * 1000.0)) * uint(cam.frameID + 2);
 
     float planeDist = 1;
-    float halfHeight = tan(radians(camFOV * 0.5)) * planeDist;
+    float halfHeight = tan(radians(cam.camFOV * 0.5)) * planeDist;
     float aspect = float(imgSize.x) / float(imgSize.y);
     float halfWidth = halfHeight * aspect;
 
-    vec3 planeCenter = camPos + camForward * planeDist;
+    vec3 planeCenter = cam.camPos + cam.camForward * planeDist;
     vec3 pointOnPlane = planeCenter
-        + (uv.x - 0.5) * 2.0 * halfWidth * camRight
-        + (uv.y - 0.5) * 2.0 * halfHeight * camUp;
+        + (uv.x - 0.5) * 2.0 * halfWidth * cam.camRight
+        + (uv.y - 0.5) * 2.0 * halfHeight * cam.camUp;
 
-    vec3 dir = normalize(pointOnPlane - camPos);
+    vec3 dir = normalize(pointOnPlane - cam.camPos);
 
     vec3 prevAverageColor = imageLoad(accumImage, pix).rgb; // Load the accumulated color
-    float totalFrames = float(frameID) + 1.0;
-    vec3 newAverage = (prevAverageColor * float(frameID) + TraceRay(camPos, dir, seed)) / totalFrames;
+    float totalFrames = float(cam.frameID) + 1.0;
+    vec3 newAverage = (prevAverageColor * float(cam.frameID) + TraceRay(cam.camPos, dir, seed)) / totalFrames;
 
     imageStore(accumImage, pix, vec4(newAverage, 1.0)); // Store the new average color
     imageStore(destImage, pix, vec4(newAverage, 1.0));
